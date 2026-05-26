@@ -3,3 +3,4 @@ instance/
 *.sqlite 
 *.pyc 
 __pycache__/ 
+.env

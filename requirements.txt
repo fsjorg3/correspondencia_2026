@@ -9,3 +9,4 @@ reportlab
 pdfkit
 psycopg2-binary
 XlsxWriter
+python-dotenv

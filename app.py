@@ -8,6 +8,8 @@ import pandas as pd
 import pdfkit
 import re
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import uuid
 from openpyxl import load_workbook  # si ya no lo usas, también lo puedes borrar
 
@@ -54,6 +56,7 @@ def dias_habiles(fecha_inicio, fecha_fin):
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario = db.Column(db.String(50), unique=True, nullable=False)
+    nombre_completo = db.Column(db.String(100))
     password_hash = db.Column(db.String(200), nullable=False)
     rol = db.Column(db.String(50), nullable=False)
     gerencia = db.Column(db.String(50))
