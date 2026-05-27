@@ -433,9 +433,12 @@ def exportar_excel():
 from sqlalchemy import cast, Date
 
 @app.route("/exportar_pdf")
+
 def exportar_pdf():
     if "gerencia" not in session:
         return redirect(url_for("login"))
+
+
 
     q = request.args.get("q", "").strip()
     gerencia_filtro = request.args.get("gerencia", "")
@@ -504,26 +507,38 @@ def exportar_pdf():
     # ⭐ Renderizar HTML
     rendered = render_template("oficios_pdf.html", oficios=data)
 
+    # ⭐ Configuración explícita del binario wkhtmltopdf
+    # Valida esta ruta en tu terminal con: which wkhtmltopdf
+    ruta_wkhtmltopdf = '/usr/local/bin/wkhtmltopdf' 
+    configuracion = pdfkit.configuration(wkhtmltopdf=ruta_wkhtmltopdf)
+
     # ⭐ Opciones PDF
     options = {
-        "page-size": "Letter",
-        "orientation": "Portrait",
-        "encoding": "UTF-8",
-        "margin-top": "0.5in",
-        "margin-bottom": "0.5in",
-        "margin-left": "0.3in",
-        "margin-right": "0.3in",
-        "enable-local-file-access": None
+    "page-size": "Letter",
+    "orientation": "Portrait",
+    "encoding": "UTF-8",
+    "margin-top": "0.5in",
+    "margin-bottom": "0.5in",
+    "margin-left": "0.3in",
+    "margin-right": "0.3in",
+    "enable-local-file-access": None
     }
 
-    pdf = pdfkit.from_string(rendered, False, options=options)
+    # ⭐ Generación del PDF con la configuración inyectada
+    pdf = pdfkit.from_string(
+        rendered, 
+        False, 
+        options=options, 
+        configuration=configuracion  # <-- El parámetro clave
+    )
 
     return send_file(
         BytesIO(pdf),
         as_attachment=True,
         download_name="oficios_filtrados.pdf",
         mimetype="application/pdf"
-    )
+    )       
+
 
 # --------------------------
 #   VER OFICIO
@@ -826,7 +841,7 @@ def dashboard():
     # ============================
     # TABLA POR GERENCIA
     # ============================
-    gerencias = ["DG", "GAL", "GAL-Despacho", "GPSOI", "GSMA", "GSTS"]
+    gerencias = ["DG", "GAL", "GAL-Despacho", "GPSOI", "GSMA", "GSTS", "GAF"]
     tabla_gerencias = []
 
     for g in gerencias:
