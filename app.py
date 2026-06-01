@@ -82,25 +82,25 @@ class Usuario(db.Model):
 class Oficio(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     numero = db.Column(db.String(50))
-    numero_oficio = db.Column(db.String(100))
+    numero_oficio = db.Column(db.String(250))
     fecha = db.Column(db.String(20))
     hora = db.Column(db.String(20))
-    numero_expediente = db.Column(db.String(100))
-    quien_emite = db.Column(db.String(200))
-    con_copia_para = db.Column(db.String(200))
-    anexos = db.Column(db.String(200))
+    numero_expediente = db.Column(db.String(250))
+    quien_emite = db.Column(db.String(300))
+    con_copia_para = db.Column(db.String(300))
+    anexos = db.Column(db.String(300))
     gerencia_turnada = db.Column(db.String(50))
-    asunto = db.Column(db.String(500))
-    prioridad = db.Column(db.String(20))
+    asunto = db.Column(db.Text)
+    prioridad = db.Column(db.String(50))
     termino = db.Column(db.Integer)
     fecha_limite = db.Column(db.String(20))
-    responsable1 = db.Column(db.String(200))
-    responsable2 = db.Column(db.String(200))
+    responsable1 = db.Column(db.String(300))
+    responsable2 = db.Column(db.String(300))
     nis = db.Column(db.String(50))
     estatus = db.Column(db.String(50))
     observaciones = db.Column(db.Text)
     fecha_atencion = db.Column(db.String(20))
-    oficio_respuesta = db.Column(db.String(200))
+    oficio_respuesta = db.Column(db.String(250))
     fecha_acuse = db.Column(db.String(20))
     dias_atencion = db.Column(db.Integer)
 
@@ -292,9 +292,20 @@ def lista():
 
     consulta = Oficio.query
 
-    # ⭐ Si NO es admin ni superadmin → solo ve su gerencia
+    # ⭐ Si NO es admin ni superadmin → aplicar reglas por gerencia
     if session.get("rol") not in ["admin", "superadmin"]:
-        consulta = consulta.filter_by(gerencia_turnada=session["gerencia"])
+        ger = session.get("gerencia")
+
+        # GAL ve GAL y GAL-Despacho
+        if ger == "GAL":
+            consulta = consulta.filter(
+                (Oficio.gerencia_turnada == "GAL") |
+                (Oficio.gerencia_turnada == "GAL-Despacho")
+            )
+        # Las demás gerencias (incluyendo GAL-Despacho) solo ven lo suyo
+        else:
+            consulta = consulta.filter_by(gerencia_turnada=ger)
+
 
     # ⭐ Filtro de búsqueda general
     if q:
@@ -358,9 +369,16 @@ def exportar_excel():
 
     consulta = Oficio.query
 
-    # ⭐ Gerencias solo ven lo suyo
+    # ⭐ Si NO es admin ni superadmin → aplicar reglas por gerencia
     if session.get("rol") not in ["admin", "superadmin"]:
-        consulta = consulta.filter_by(gerencia_turnada=session["gerencia"])
+        ger = session.get("gerencia")
+        if ger == "GAL":
+            consulta = consulta.filter(
+                (Oficio.gerencia_turnada == "GAL") |
+                (Oficio.gerencia_turnada == "GAL-Despacho")
+            )
+        else:
+            consulta = consulta.filter_by(gerencia_turnada=ger)
 
     # ⭐ Filtro búsqueda
     if q:
@@ -448,9 +466,16 @@ def exportar_pdf():
 
     consulta = Oficio.query
 
-    # ⭐ Gerencias solo ven lo suyo
+    # ⭐ Si NO es admin ni superadmin → aplicar reglas por gerencia
     if session.get("rol") not in ["admin", "superadmin"]:
-        consulta = consulta.filter_by(gerencia_turnada=session["gerencia"])
+        ger = session.get("gerencia")
+        if ger == "GAL":
+            consulta = consulta.filter(
+                (Oficio.gerencia_turnada == "GAL") |
+                (Oficio.gerencia_turnada == "GAL-Despacho")
+            )
+        else:
+            consulta = consulta.filter_by(gerencia_turnada=ger)
 
     # ⭐ Filtro búsqueda
     if q:
@@ -815,11 +840,18 @@ def dashboard():
     rol = session.get("rol")
     gerencia_usuario = session.get("gerencia")
 
-    # GERENCIAS → solo lo suyo
+    # GERENCIAS → aplicar reglas por gerencia
     if rol not in ["admin", "superadmin"]:
         if not gerencia_usuario:
             return redirect(url_for("login"))  # Sesión inválida o incompleta
-        consulta = consulta.filter_by(gerencia_turnada=gerencia_usuario)
+            
+        if gerencia_usuario == "GAL":
+            consulta = consulta.filter(
+                (Oficio.gerencia_turnada == "GAL") |
+                (Oficio.gerencia_turnada == "GAL-Despacho")
+            )
+        else:
+            consulta = consulta.filter_by(gerencia_turnada=gerencia_usuario)
 
     # ============================
     # FILTRO POR AÑO

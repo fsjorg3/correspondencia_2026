@@ -5,3 +5,5 @@ instance/
 __pycache__/ 
 .env
 *.sql
+*.xlsx
+normalizar_excel.py
