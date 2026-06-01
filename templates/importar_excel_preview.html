@@ -33,6 +33,9 @@
 <!-- ⭐ Script que envía JSON a Flask -->
 <script>
 document.getElementById("btnGuardar").addEventListener("click", function () {
+    const btn = document.getElementById("btnGuardar");
+    btn.disabled = true;
+    btn.innerText = "Importando...";
 
     fetch("{{ url_for('importar_excel_guardar') }}", {
         method: "POST",
@@ -41,14 +44,31 @@ document.getElementById("btnGuardar").addEventListener("click", function () {
         },
         body: JSON.stringify({{ preview|tojson }})
     })
-    .then(r => r.json())
-    .then(data => {
-        alert("Importación completada");
-        window.location.href = "{{ url_for('lista') }}";
+    .then(r => r.json().then(data => ({ status: r.status, body: data })))
+    .then(response => {
+        const data = response.body;
+        if (data.success) {
+            alert(data.mensaje || "Importación completada");
+            window.location.href = "{{ url_for('lista') }}";
+        } else {
+            let msgError = (data.error || "Error al importar") + "\n\n";
+            if (data.detalles && data.detalles.length > 0) {
+                // Mostrar hasta 10 errores en el alert
+                msgError += "Detalles:\n- " + data.detalles.slice(0, 10).join("\n- ");
+                if (data.detalles.length > 10) {
+                    msgError += `\n... y ${data.detalles.length - 10} errores más.`;
+                }
+            }
+            alert(msgError);
+            btn.disabled = false;
+            btn.innerText = "Confirmar importación";
+        }
     })
     .catch(err => {
-        alert("Error al importar");
+        alert("Error de conexión o fallo crítico al intentar importar.");
         console.error(err);
+        btn.disabled = false;
+        btn.innerText = "Confirmar importación";
     });
 
 });
