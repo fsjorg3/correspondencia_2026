@@ -51,13 +51,27 @@ document.getElementById("btnGuardar").addEventListener("click", function () {
             alert(data.mensaje || "Importación completada");
             window.location.href = "{{ url_for('lista') }}";
         } else {
-            let msgError = (data.error || "Error al importar") + "\n\n";
+            let msgError = data.error || "Hubo un problema al importar el archivo.";
+            
             if (data.detalles && data.detalles.length > 0) {
-                // Mostrar hasta 10 errores en el alert
-                msgError += "Detalles:\n- " + data.detalles.slice(0, 10).join("\n- ");
-                if (data.detalles.length > 10) {
-                    msgError += `\n... y ${data.detalles.length - 10} errores más.`;
-                }
+                // Imprimir con formato mejorado en la consola
+                console.groupCollapsed("%c🚨 Errores de Importación (Haz clic para expandir)", "color: red; font-size: 14px; font-weight: bold;");
+                console.error("Mensaje del servidor: ", data.error);
+                
+                // Estructurar los errores en una tabla para la consola
+                const erroresTabla = data.detalles.map(err => {
+                    // El regex busca el patrón: "Fila X (Folio: Y): Z" o "Fila X: Z"
+                    const match = err.match(/Fila (\d+)(?:\s+\(Folio:\s*([^)]*)\))?:\s*(.*)/);
+                    if (match) {
+                        return { "Fila": match[1], "Folio": match[2] || "N/A", "Descripción del Error": match[3] };
+                    }
+                    return { "Fila": "N/A", "Folio": "N/A", "Descripción del Error": err };
+                });
+                
+                console.table(erroresTabla);
+                console.groupEnd();
+                
+                msgError += "\n\n👉 Por favor abre la Consola del Navegador (presiona F12 o Ctrl+Shift+I) para ver la tabla con el reporte detallado de errores.";
             }
             alert(msgError);
             btn.disabled = false;
