@@ -300,7 +300,7 @@ def lista():
         if ger == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada == "GAL-Despacho")
+                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
             )
         # Las demás gerencias (incluyendo GAL-Despacho) solo ven lo suyo
         else:
@@ -375,7 +375,7 @@ def exportar_excel():
         if ger == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada == "GAL-Despacho")
+                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
             )
         else:
             consulta = consulta.filter_by(gerencia_turnada=ger)
@@ -472,7 +472,7 @@ def exportar_pdf():
         if ger == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada == "GAL-Despacho")
+                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
             )
         else:
             consulta = consulta.filter_by(gerencia_turnada=ger)
@@ -612,7 +612,7 @@ def responder(id):
 
         # Caso especial GAL
         if gerencia == "GAL":
-            if oficio.gerencia_turnada not in ["GAL", "GAL-Despacho"]:
+            if oficio.gerencia_turnada not in ["GAL", "GAL-Despacho", "GAL-DESPACHO"]:
                 return "Acceso no autorizado", 403
 
         # Caso general
@@ -848,7 +848,7 @@ def dashboard():
         if gerencia_usuario == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada == "GAL-Despacho")
+                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
             )
         else:
             consulta = consulta.filter_by(gerencia_turnada=gerencia_usuario)
@@ -912,15 +912,15 @@ def dashboard():
     tabla_gerencias = []
 
     for g in gerencias:
-        recibidos = len([o for o in oficios if o.gerencia_turnada == g])
-        atendidos = len([o for o in oficios if o.gerencia_turnada == g and o.estatus == "Solucionado"])
-        pendientes = len([o for o in oficios if o.gerencia_turnada == g and o.estatus == "Pendiente"])
-        proceso = len([o for o in oficios if o.gerencia_turnada == g and o.estatus == "En proceso"])
-        acuerdo = len([o for o in oficios if o.gerencia_turnada == g and o.estatus == "En acuerdo"])
+        recibidos = len([o for o in oficios if str(o.gerencia_turnada).upper() == g.upper()])
+        atendidos = len([o for o in oficios if str(o.gerencia_turnada).upper() == g.upper() and o.estatus == "Solucionado"])
+        pendientes = len([o for o in oficios if str(o.gerencia_turnada).upper() == g.upper() and o.estatus == "Pendiente"])
+        proceso = len([o for o in oficios if str(o.gerencia_turnada).upper() == g.upper() and o.estatus == "En proceso"])
+        acuerdo = len([o for o in oficios if str(o.gerencia_turnada).upper() == g.upper() and o.estatus == "En acuerdo"])
 
         cumplimiento = round((atendidos / recibidos) * 100, 2) if recibidos > 0 else 0
 
-        dias_g = [o.dias_atencion for o in oficios if o.gerencia_turnada == g and o.dias_atencion]
+        dias_g = [o.dias_atencion for o in oficios if str(o.gerencia_turnada).upper() == g.upper() and o.dias_atencion]
         promedio_dias_g = round(sum(dias_g) / len(dias_g), 2) if dias_g else 0
 
         tabla_gerencias.append({
