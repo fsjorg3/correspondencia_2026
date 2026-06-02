@@ -23,13 +23,22 @@
         <label class="form-label fw-bold text-secondary">Gerencia</label>
         <select name="gerencia" class="form-select filtro-gris">
             <option value="">Todas</option>
-            <option value="DG" {% if gerencia_filtro=='DG' %}selected{% endif %}>DG</option>
-            <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
-            <option value="GAL-Despacho" {% if gerencia_filtro=='GAL-Despacho' %}selected{% endif %}>GAL-Despacho</option>
-            <option value="GPSOI" {% if gerencia_filtro=='GPSOI' %}selected{% endif %}>GPSOI</option>
-            <option value="GSMA" {% if gerencia_filtro=='GSMA' %}selected{% endif %}>GSMA</option>
-            <option value="GSTS" {% if gerencia_filtro=='GSTS' %}selected{% endif %}>GSTS</option>
-            <option value="GAF" {% if gerencia_filtro=='GAF' %}selected{% endif %}>GAF</option>
+            {% if session['rol'] in ['admin', 'superadmin'] %}
+                <option value="DG" {% if gerencia_filtro=='DG' %}selected{% endif %}>DG</option>
+                <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
+                <option value="GAL-DESPACHO" {% if gerencia_filtro=='GAL-DESPACHO' %}selected{% endif %}>GAL-DESPACHO</option>
+                <option value="GPSOI" {% if gerencia_filtro=='GPSOI' %}selected{% endif %}>GPSOI</option>
+                <option value="GSMA" {% if gerencia_filtro=='GSMA' %}selected{% endif %}>GSMA</option>
+                <option value="GSTS" {% if gerencia_filtro=='GSTS' %}selected{% endif %}>GSTS</option>
+                <option value="GAF" {% if gerencia_filtro=='GAF' %}selected{% endif %}>GAF</option>
+            {% else %}
+                {% if session['gerencia'] == 'GAL' %}
+                    <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
+                    <option value="GAL-DESPACHO" {% if gerencia_filtro=='GAL-DESPACHO' %}selected{% endif %}>GAL-DESPACHO</option>
+                {% else %}
+                    <option value="{{ session['gerencia'] }}" {% if gerencia_filtro==session['gerencia'] %}selected{% endif %}>{{ session['gerencia'] }}</option>
+                {% endif %}
+            {% endif %}
         </select>
     </div>
 

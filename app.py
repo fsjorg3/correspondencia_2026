@@ -296,13 +296,13 @@ def lista():
     if session.get("rol") not in ["admin", "superadmin"]:
         ger = session.get("gerencia")
 
-        # GAL ve GAL y GAL-Despacho
+        # GAL ve GAL y GAL-DESPACHO
         if ger == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
+                (Oficio.gerencia_turnada.ilike("GAL-DESPACHO"))
             )
-        # Las demás gerencias (incluyendo GAL-Despacho) solo ven lo suyo
+        # Las demás gerencias (incluyendo GAL-DESPACHO) solo ven lo suyo
         else:
             consulta = consulta.filter_by(gerencia_turnada=ger)
 
@@ -315,9 +315,10 @@ def lista():
             (Oficio.numero_oficio.ilike(f"%{q}%"))
         )
 
-    # ⭐ Filtro por gerencia (solo admin/superadmin)
-    if gerencia_filtro and session.get("rol") in ["admin", "superadmin"]:
-        consulta = consulta.filter_by(gerencia_turnada=gerencia_filtro)
+    # ⭐ Filtro por gerencia (para todos)
+    # Si no es admin, ya está limitado por su permiso base arriba, así que esto solo afina su vista
+    if gerencia_filtro:
+        consulta = consulta.filter(Oficio.gerencia_turnada.ilike(gerencia_filtro))
 
     # ⭐ Filtro por estatus
     if estatus_filtro:
@@ -375,7 +376,7 @@ def exportar_excel():
         if ger == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
+                (Oficio.gerencia_turnada.ilike("GAL-DESPACHO"))
             )
         else:
             consulta = consulta.filter_by(gerencia_turnada=ger)
@@ -389,8 +390,8 @@ def exportar_excel():
         )
 
     # ⭐ Filtro gerencia
-    if gerencia_filtro and session.get("rol") in ["admin", "superadmin"]:
-        consulta = consulta.filter_by(gerencia_turnada=gerencia_filtro)
+    if gerencia_filtro:
+        consulta = consulta.filter(Oficio.gerencia_turnada.ilike(gerencia_filtro))
 
     # ⭐ Filtro estatus
     if estatus_filtro:
@@ -472,7 +473,7 @@ def exportar_pdf():
         if ger == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
+                (Oficio.gerencia_turnada.ilike("GAL-DESPACHO"))
             )
         else:
             consulta = consulta.filter_by(gerencia_turnada=ger)
@@ -486,8 +487,8 @@ def exportar_pdf():
         )
 
     # ⭐ Filtro gerencia
-    if gerencia_filtro and session.get("rol") in ["admin", "superadmin"]:
-        consulta = consulta.filter_by(gerencia_turnada=gerencia_filtro)
+    if gerencia_filtro:
+        consulta = consulta.filter(Oficio.gerencia_turnada.ilike(gerencia_filtro))
 
     # ⭐ Filtro estatus
     if estatus_filtro:
@@ -612,7 +613,7 @@ def responder(id):
 
         # Caso especial GAL
         if gerencia == "GAL":
-            if oficio.gerencia_turnada not in ["GAL", "GAL-Despacho", "GAL-DESPACHO"]:
+            if oficio.gerencia_turnada not in ["GAL", "GAL-DESPACHO", "GAL-DESPACHO"]:
                 return "Acceso no autorizado", 403
 
         # Caso general
@@ -848,7 +849,7 @@ def dashboard():
         if gerencia_usuario == "GAL":
             consulta = consulta.filter(
                 (Oficio.gerencia_turnada == "GAL") |
-                (Oficio.gerencia_turnada.ilike("GAL-Despacho"))
+                (Oficio.gerencia_turnada.ilike("GAL-DESPACHO"))
             )
         else:
             consulta = consulta.filter_by(gerencia_turnada=gerencia_usuario)
@@ -908,7 +909,7 @@ def dashboard():
     # ============================
     # TABLA POR GERENCIA
     # ============================
-    gerencias = ["DG", "GAL", "GAL-Despacho", "GPSOI", "GSMA", "GSTS", "GAF"]
+    gerencias = ["DG", "GAL", "GAL-DESPACHO", "GPSOI", "GSMA", "GSTS", "GAF"]
     tabla_gerencias = []
 
     for g in gerencias:
