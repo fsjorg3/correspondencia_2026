@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block menu %}
-    {% include "menu.html" %}
+{% include "menu.html" %}
 {% endblock %}
 
 {% block contenido %}
@@ -14,8 +14,7 @@
     <div class="col-md-3">
         <label class="form-label fw-bold text-secondary">Buscar</label>
         <input type="text" name="q" class="form-control filtro-gris"
-               placeholder="Folio, NIS o Número de oficio"
-               value="{{ q }}">
+            placeholder="Folio, NIS, Número de oficio o responsable 2" value="{{ q }}">
     </div>
 
     <!-- ⭐ FILTRO POR GERENCIA -->
@@ -24,20 +23,23 @@
         <select name="gerencia" class="form-select filtro-gris">
             <option value="">Todas</option>
             {% if session['rol'] in ['admin', 'superadmin'] %}
-                <option value="DG" {% if gerencia_filtro=='DG' %}selected{% endif %}>DG</option>
-                <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
-                <option value="GAL-DESPACHO" {% if gerencia_filtro=='GAL-DESPACHO' %}selected{% endif %}>GAL-DESPACHO</option>
-                <option value="GPSOI" {% if gerencia_filtro=='GPSOI' %}selected{% endif %}>GPSOI</option>
-                <option value="GSMA" {% if gerencia_filtro=='GSMA' %}selected{% endif %}>GSMA</option>
-                <option value="GSTS" {% if gerencia_filtro=='GSTS' %}selected{% endif %}>GSTS</option>
-                <option value="GAF" {% if gerencia_filtro=='GAF' %}selected{% endif %}>GAF</option>
+            <option value="DG" {% if gerencia_filtro=='DG' %}selected{% endif %}>DG</option>
+            <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
+            <option value="GAL-DESPACHO" {% if gerencia_filtro=='GAL-DESPACHO' %}selected{% endif %}>GAL-DESPACHO
+            </option>
+            <option value="GPSOI" {% if gerencia_filtro=='GPSOI' %}selected{% endif %}>GPSOI</option>
+            <option value="GSMA" {% if gerencia_filtro=='GSMA' %}selected{% endif %}>GSMA</option>
+            <option value="GSTS" {% if gerencia_filtro=='GSTS' %}selected{% endif %}>GSTS</option>
+            <option value="GAF" {% if gerencia_filtro=='GAF' %}selected{% endif %}>GAF</option>
             {% else %}
-                {% if session['gerencia'] == 'GAL' %}
-                    <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
-                    <option value="GAL-DESPACHO" {% if gerencia_filtro=='GAL-DESPACHO' %}selected{% endif %}>GAL-DESPACHO</option>
-                {% else %}
-                    <option value="{{ session['gerencia'] }}" {% if gerencia_filtro==session['gerencia'] %}selected{% endif %}>{{ session['gerencia'] }}</option>
-                {% endif %}
+            {% if session['gerencia'] == 'GAL' %}
+            <option value="GAL" {% if gerencia_filtro=='GAL' %}selected{% endif %}>GAL</option>
+            <option value="GAL-DESPACHO" {% if gerencia_filtro=='GAL-DESPACHO' %}selected{% endif %}>GAL-DESPACHO
+            </option>
+            {% else %}
+            <option value="{{ session['gerencia'] }}" {% if gerencia_filtro==session['gerencia'] %}selected{% endif %}>
+                {{ session['gerencia'] }}</option>
+            {% endif %}
             {% endif %}
         </select>
     </div>
@@ -47,9 +49,9 @@
         <label class="form-label fw-bold text-secondary">Estatus</label>
         <select name="estatus" class="form-select filtro-gris">
             <option value="">Todos</option>
-            <option value="Pendiente"   {% if estatus_filtro=='Pendiente' %}selected{% endif %}>Pendiente</option>
-            <option value="En proceso"  {% if estatus_filtro=='En proceso' %}selected{% endif %}>En proceso</option>
-            <option value="En acuerdo"  {% if estatus_filtro=='En acuerdo' %}selected{% endif %}>En acuerdo</option>
+            <option value="Pendiente" {% if estatus_filtro=='Pendiente' %}selected{% endif %}>Pendiente</option>
+            <option value="En proceso" {% if estatus_filtro=='En proceso' %}selected{% endif %}>En proceso</option>
+            <option value="En acuerdo" {% if estatus_filtro=='En acuerdo' %}selected{% endif %}>En acuerdo</option>
             <option value="Solucionado" {% if estatus_filtro=='Solucionado' %}selected{% endif %}>Solucionado</option>
         </select>
     </div>
@@ -57,58 +59,54 @@
     <!-- ⭐ FECHA INICIO -->
     <div class="col-md-3">
         <label class="form-label fw-bold text-secondary">Fecha inicio</label>
-        <input type="date" name="fecha_ini" class="form-control filtro-gris"
-               value="{{ fecha_ini }}">
+        <input type="date" name="fecha_ini" class="form-control filtro-gris" value="{{ fecha_ini }}">
     </div>
 
     <!-- ⭐ FECHA FINAL -->
     <div class="col-md-3">
         <label class="form-label fw-bold text-secondary">Fecha final</label>
-        <input type="date" name="fecha_fin" class="form-control filtro-gris"
-               value="{{ fecha_fin }}">
+        <input type="date" name="fecha_fin" class="form-control filtro-gris" value="{{ fecha_fin }}">
     </div>
 
     <!-- ⭐ SELECTOR DE REGISTROS POR PÁGINA -->
     <div class="col-md-3">
         <label class="form-label fw-bold text-secondary">Mostrar</label>
         <select name="per_page" class="form-select filtro-gris" onchange="this.form.submit()">
-            <option value="10"  {% if per_page == 10 %}selected{% endif %}>10</option>
-            <option value="20"  {% if per_page == 20 %}selected{% endif %}>20</option>
-            <option value="50"  {% if per_page == 50 %}selected{% endif %}>50</option>
-            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            <option value="10" {% if per_page==10 %}selected{% endif %}>10</option>
+            <option value="20" {% if per_page==20 %}selected{% endif %}>20</option>
+            <option value="50" {% if per_page==50 %}selected{% endif %}>50</option>
+            <option value="100" {% if per_page==100 %}selected{% endif %}>100</option>
         </select>
     </div>
 
     <!-- ⭐ BOTONES -->
-<div class="col-md-3 d-flex align-items-end gap-2">
+    <div class="col-md-3 d-flex align-items-end gap-2">
 
-    <button class="btn btn-primary">Filtrar</button>
+        <button class="btn btn-primary">Filtrar</button>
 
-    <a href="{{ url_for('lista') }}" class="btn btn-secondary">Limpiar</a>
+        <a href="{{ url_for('lista') }}" class="btn btn-secondary">Limpiar</a>
 
-    <!-- ⭐ EXPORTAR PDF -->
-    <a class="btn btn-danger"
-       href="{{ url_for('exportar_pdf',
+        <!-- ⭐ EXPORTAR PDF -->
+        <a class="btn btn-danger" href="{{ url_for('exportar_pdf',
                         q=q,
                         gerencia=gerencia_filtro,
                         estatus=estatus_filtro,
                         fecha_ini=fecha_ini,
                         fecha_fin=fecha_fin) }}">
-        PDF
-    </a>
+            PDF
+        </a>
 
-    <!-- ⭐ EXPORTAR EXCEL -->
-    <a class="btn btn-success"
-       href="{{ url_for('exportar_excel',
+        <!-- ⭐ EXPORTAR EXCEL -->
+        <a class="btn btn-success" href="{{ url_for('exportar_excel',
                         q=q,
                         gerencia=gerencia_filtro,
                         estatus=estatus_filtro,
                         fecha_ini=fecha_ini,
                         fecha_fin=fecha_fin) }}">
-        Excel
-    </a>
+            Excel
+        </a>
 
-</div>
+    </div>
 
 </form>
 
@@ -143,30 +141,30 @@
             <!-- ⭐ PRIORIDAD -->
             <td>
                 {% if o.prioridad == "Urgente" %}
-                    <span class="badge bg-danger">Urgente</span>
+                <span class="badge bg-danger">Urgente</span>
                 {% elif o.prioridad == "Alta" %}
-                    <span class="badge bg-warning text-dark">Alta</span>
+                <span class="badge bg-warning text-dark">Alta</span>
                 {% elif o.prioridad == "Media" %}
-                    <span class="badge bg-info text-dark">Media</span>
+                <span class="badge bg-info text-dark">Media</span>
                 {% elif o.prioridad == "Baja" %}
-                    <span class="badge bg-secondary">Baja</span>
+                <span class="badge bg-secondary">Baja</span>
                 {% else %}
-                    <span class="badge bg-light text-dark">N/A</span>
+                <span class="badge bg-light text-dark">N/A</span>
                 {% endif %}
             </td>
 
             <!-- ⭐ ESTATUS -->
             <td>
                 {% if o.estatus == "Pendiente" %}
-                    <span class="badge bg-danger">Pendiente</span>
+                <span class="badge bg-danger">Pendiente</span>
                 {% elif o.estatus == "En proceso" %}
-                    <span class="badge bg-warning text-dark">En proceso</span>
+                <span class="badge bg-warning text-dark">En proceso</span>
                 {% elif o.estatus == "En acuerdo" %}
-                    <span class="badge bg-info text-dark">En acuerdo</span>
+                <span class="badge bg-info text-dark">En acuerdo</span>
                 {% elif o.estatus == "Solucionado" %}
-                    <span class="badge bg-success">Solucionado</span>
+                <span class="badge bg-success">Solucionado</span>
                 {% else %}
-                    <span class="badge bg-secondary">N/A</span>
+                <span class="badge bg-secondary">N/A</span>
                 {% endif %}
             </td>
 
@@ -176,17 +174,17 @@
             <td class="d-flex flex-column gap-1">
 
                 {% if session['rol'] == 'admin' %}
-                    <a href="{{ url_for('editar', id=o.id) }}" class="btn btn-sm btn-warning">
-                        ✏️ Editar
-                    </a>
+                <a href="{{ url_for('editar', id=o.id) }}" class="btn btn-sm btn-warning">
+                    ✏️ Editar
+                </a>
                 {% endif %}
 
                 {% if o.estatus == "Solucionado" %}
-                    <span class="badge bg-secondary">Finalizado</span>
+                <span class="badge bg-secondary">Finalizado</span>
                 {% else %}
-                    <a href="{{ url_for('responder', id=o.id) }}" class="btn btn-sm btn-primary">
-                        Responder
-                    </a>
+                <a href="{{ url_for('responder', id=o.id) }}" class="btn btn-sm btn-primary">
+                    Responder
+                </a>
                 {% endif %}
 
             </td>
@@ -202,8 +200,7 @@
 
         {% if paginacion.has_prev %}
         <li class="page-item">
-            <a class="page-link"
-               href="{{ url_for('lista',
+            <a class="page-link" href="{{ url_for('lista',
                                 page=paginacion.prev_num,
                                 per_page=per_page,
                                 q=q,
@@ -217,10 +214,9 @@
         {% endif %}
 
         {% for num in paginacion.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-            {% if num %}
-                <li class="page-item {% if num == paginacion.page %}active{% endif %}">
-                    <a class="page-link"
-                       href="{{ url_for('lista',
+        {% if num %}
+        <li class="page-item {% if num == paginacion.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('lista',
                                         page=num,
                                         per_page=per_page,
                                         q=q,
@@ -228,20 +224,19 @@
                                         estatus=estatus_filtro,
                                         fecha_ini=fecha_ini,
                                         fecha_fin=fecha_fin) }}">
-                        {{ num }}
-                    </a>
-                </li>
-            {% else %}
-                <li class="page-item disabled">
-                    <span class="page-link">…</span>
-                </li>
-            {% endif %}
+                {{ num }}
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link">…</span>
+        </li>
+        {% endif %}
         {% endfor %}
 
         {% if paginacion.has_next %}
         <li class="page-item">
-            <a class="page-link"
-               href="{{ url_for('lista',
+            <a class="page-link" href="{{ url_for('lista',
                                 page=paginacion.next_num,
                                 per_page=per_page,
                                 q=q,

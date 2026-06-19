@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block menu %}
-    {% include "menu.html" %}
+{% include "menu.html" %}
 {% endblock %}
 
 {% block contenido %}
@@ -31,7 +31,7 @@
     <!-- ⭐ Hora -->
     <div class="col-md-4">
         <label class="form-label fw-bold text-secondary">Hora</label>
-        <input type="time" name="hora" class="form-control filtro-gris">
+        <input type="time" name="hora" id="hora" class="form-control filtro-gris">
     </div>
 
     <!-- ⭐ Número de expediente -->
@@ -129,50 +129,108 @@
 
 </form>
 
-<!-- ⭐ SCRIPT: Cálculo de fecha límite -->
+<!-- ⭐ Modal de Advertencia -->
+<div class="modal fade" id="modalAdvertencia" tabindex="-1" aria-labelledby="modalAdvertenciaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalAdvertenciaLabel">⚠️ Advertencia</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Está a punto de modificar la fecha o la hora del oficio. Por favor, asegúrese de
+                    ingresar los datos correctos para evitar errores en el calculo de la fecha límite de atención.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-warning text-dark" data-bs-dismiss="modal">Aceptar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ⭐ SCRIPT: Cálculo de fecha límite y prellenado -->
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", function () {
 
-    const prioridad = document.getElementById("prioridad");
-    const fechaIngreso = document.getElementById("fecha");
-    const termino = document.getElementById("termino");
-    const fechaLimite = document.getElementById("fecha_limite");
+        const prioridad = document.getElementById("prioridad");
+        const fechaIngreso = document.getElementById("fecha");
+        const termino = document.getElementById("termino");
+        const fechaLimite = document.getElementById("fecha_limite");
+        const horaIngreso = document.getElementById("hora");
 
-    function calcularFechaLimite() {
-        if (!fechaIngreso.value) return;
+        function calcularFechaLimite() {
+            if (!fechaIngreso.value) return;
 
-        const fecha = new Date(fechaIngreso.value);
-        let dias = 0;
+            const fecha = new Date(fechaIngreso.value);
+            let dias = 0;
 
-        if (prioridad.value === "Urgente") dias = 1;
-        else if (prioridad.value === "Alta") dias = 3;
-        else if (prioridad.value === "Media") dias = 15;
-        else if (prioridad.value === "Baja") dias = 30;
-        else dias = 0; // No aplica
+            if (prioridad.value === "Urgente") dias = 1;
+            else if (prioridad.value === "Alta") dias = 3;
+            else if (prioridad.value === "Media") dias = 15;
+            else if (prioridad.value === "Baja") dias = 30;
+            else dias = 0; // No aplica
 
-        termino.value = dias;
+            termino.value = dias;
 
-        if (dias === 0) {
-            fechaLimite.value = "";
-            return;
+            if (dias === 0) {
+                fechaLimite.value = "";
+                return;
+            }
+
+            let contador = 0;
+            let fechaTemp = new Date(fecha);
+
+            while (contador < dias) {
+                fechaTemp.setDate(fechaTemp.getDate() + 1);
+                if (fechaTemp.getDay() !== 0 && fechaTemp.getDay() !== 6) {
+                    contador++;
+                }
+            }
+
+            fechaLimite.value = fechaTemp.toISOString().split("T")[0];
         }
 
-        let contador = 0;
-        let fechaTemp = new Date(fecha);
+        // Asignar fecha y hora actuales en local
+        const hoy = new Date();
+        const anio = hoy.getFullYear();
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+        const dia = String(hoy.getDate()).padStart(2, '0');
+        const fechaActual = `${anio}-${mes}-${dia}`;
 
-        while (contador < dias) {
-            fechaTemp.setDate(fechaTemp.getDate() + 1);
-            if (fechaTemp.getDay() !== 0 && fechaTemp.getDay() !== 6) {
-                contador++;
+        const horas = String(hoy.getHours()).padStart(2, '0');
+        const minutos = String(hoy.getMinutes()).padStart(2, '0');
+        const horaActual = `${horas}:${minutos}`;
+
+        if (fechaIngreso && !fechaIngreso.value) {
+            fechaIngreso.value = fechaActual;
+            calcularFechaLimite();
+        }
+        if (horaIngreso && !horaIngreso.value) {
+            horaIngreso.value = horaActual;
+        }
+
+        // Modal de advertencia al hacer clic en fecha u hora
+        const modalAdvertenciaElement = document.getElementById("modalAdvertencia");
+        const modalAdvertencia = new bootstrap.Modal(modalAdvertenciaElement);
+        let modalMostrado = false;
+
+        function mostrarAdvertencia() {
+            if (!modalMostrado) {
+                modalAdvertencia.show();
+                modalMostrado = true;
             }
         }
 
-        fechaLimite.value = fechaTemp.toISOString().split("T")[0];
-    }
+        if (fechaIngreso) {
+            fechaIngreso.addEventListener("click", mostrarAdvertencia);
+        }
+        if (horaIngreso) {
+            horaIngreso.addEventListener("click", mostrarAdvertencia);
+        }
 
-    prioridad.addEventListener("change", calcularFechaLimite);
-    fechaIngreso.addEventListener("change", calcularFechaLimite);
-});
+        prioridad.addEventListener("change", calcularFechaLimite);
+        fechaIngreso.addEventListener("change", calcularFechaLimite);
+    });
 </script>
 
 {% endblock %}

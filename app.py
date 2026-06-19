@@ -312,7 +312,8 @@ def lista():
         consulta = consulta.filter(
             (Oficio.asunto.ilike(f"%{q}%")) |
             (Oficio.numero.ilike(f"%{q}%")) |
-            (Oficio.numero_oficio.ilike(f"%{q}%"))
+            (Oficio.numero_oficio.ilike(f"%{q}%")) |
+            (Oficio.responsable2.ilike(f"%{q}%"))    
         )
 
     # ⭐ Filtro por gerencia (para todos)
