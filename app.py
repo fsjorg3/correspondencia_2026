@@ -732,7 +732,12 @@ def construir_acta(secciones, fecha, elaboro):
     def p(texto, estilo):
         return Paragraph(xml_escape(texto or ""), estilo)
 
-    anchos = [22, 62, 85, 105, 110, 63, 63]
+    def responsables(o):
+        # Una sola columna: responsable 1 y, si existe, responsable 2 en otra línea
+        nombres = [recortar(n, 60) for n in (o.responsable1, o.responsable2) if (n or "").strip()]
+        return Paragraph("<br/>".join(xml_escape(n) for n in nombres), s_td)
+
+    anchos = [22, 58, 80, 105, 125, 80, 40]
     historia = []
 
     for indice, (gerencia, oficios) in enumerate(secciones):
@@ -749,17 +754,17 @@ def construir_acta(secciones, fecha, elaboro):
 
         filas = [[p(t, s_th) for t in (
             "No.", "Folio SOAPAP", "No. de oficio externo", "Remitente",
-            "Asunto", "Responsable 1", "Responsable 2"
+            "Asunto", "Responsable", "Hora"
         )]]
         for n, o in enumerate(oficios, start=1):
             filas.append([
                 p(str(n), s_td_c),
                 p(o.numero, s_td),
                 p(o.numero_oficio, s_td),
-                p(recortar(o.quien_emite, 80), s_td),
-                p(recortar(o.asunto, 40), s_td),
-                p(recortar(o.responsable1, 60), s_td),
-                p(recortar(o.responsable2, 60), s_td),
+                p(recortar(o.quien_emite, 100), s_td),
+                p(recortar(o.asunto, 70), s_td),
+                responsables(o),
+                p(o.hora, s_td_c),
             ])
 
         tabla = Table(filas, colWidths=anchos, repeatRows=1)
