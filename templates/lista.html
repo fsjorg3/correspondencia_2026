@@ -8,6 +8,15 @@
 
 <h3 class="mb-4">📄 Correspondencia {{ session['anio'] }}</h3>
 
+{% with mensajes = get_flashed_messages(with_categories=true) %}
+{% for categoria, mensaje in mensajes %}
+<div class="alert alert-{{ categoria }} alert-dismissible fade show" role="alert">
+    {{ mensaje }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
+{% endfor %}
+{% endwith %}
+
 <form method="GET" class="row g-3 mb-4">
 
     <!-- ⭐ BUSCADOR GENERAL -->
@@ -106,9 +115,65 @@
             Excel
         </a>
 
+        {% if session['rol'] in ['admin', 'superadmin'] %}
+        <!-- ⭐ ENTREGA-RECEPCIÓN -->
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
+            data-bs-target="#modalEntrega">
+            Entrega-recepción
+        </button>
+        {% endif %}
+
     </div>
 
 </form>
+
+{% if session['rol'] in ['admin', 'superadmin'] %}
+<!-- ⭐ MODAL ENTREGA-RECEPCIÓN -->
+<div class="modal fade" id="modalEntrega" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" method="GET" action="{{ url_for('exportar_entrega') }}">
+            <div class="modal-header">
+                <h5 class="modal-title">Acta de entrega-recepción</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-secondary">Día de entrega</label>
+                    <input type="date" name="fecha" id="entregaFecha" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-secondary">Gerencia</label>
+                    <select name="gerencia" class="form-select">
+                        <option value="">Todas (una hoja por gerencia)</option>
+                        <option value="DG">DG</option>
+                        <option value="GAL">GAL (incluye GAL-DESPACHO)</option>
+                        <option value="GPSOI">GPSOI</option>
+                        <option value="GSMA">GSMA</option>
+                        <option value="GSTS">GSTS</option>
+                        <option value="GAF">GAF</option>
+                        <option value="SIN_ASIGNAR">Sin asignar</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Descargar PDF</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Fecha por defecto: hoy (hora local del navegador)
+    document.getElementById('modalEntrega').addEventListener('show.bs.modal', function () {
+        var campo = document.getElementById('entregaFecha');
+        if (!campo.value) {
+            var d = new Date();
+            campo.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+    });
+</script>
+{% endif %}
 
 <!-- ⭐ TABLA DE OFICIOS -->
 <table class="table table-striped table-bordered">

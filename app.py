@@ -564,7 +564,310 @@ def exportar_pdf():
         as_attachment=True,
         download_name="oficios_filtrados.pdf",
         mimetype="application/pdf"
-    )       
+    )
+
+
+# --------------------------
+#   ACTA DE ENTREGA-RECEPCIÓN (PDF con ReportLab)
+# --------------------------
+from xml.sax.saxutils import escape as xml_escape
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.pdfgen import canvas as rl_canvas
+from reportlab.platypus import (
+    BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table,
+    TableStyle, KeepTogether, PageBreak, Flowable
+)
+
+MESES_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+    "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+]
+
+# Orden de las secciones del acta (GAL-DESPACHO se agrupa dentro de GAL)
+GERENCIAS_ACTA = ["DG", "GAL", "GPSOI", "GSMA", "GSTS", "GAF"]
+SIN_ASIGNAR = "SIN ASIGNAR"
+
+ACTA_IMG_DIR = os.path.join(app.root_path, "static", "img", "formato")
+ACTA_GRIS = colors.HexColor("#7F7F7F")
+
+# Márgenes del formato institucional (Carta vertical)
+ACTA_MARGEN_IZQ = 49.7
+ACTA_MARGEN_DER = 51.8
+ACTA_MARGEN_SUP = 100
+ACTA_MARGEN_INF = 90
+ACTA_ANCHO = letter[0] - ACTA_MARGEN_IZQ - ACTA_MARGEN_DER
+
+
+def fecha_larga(fecha):
+    return f"Heroica Puebla de Zaragoza a {fecha.day} de {MESES_ES[fecha.month - 1]} del {fecha.year}"
+
+
+def recortar(texto, limite):
+    texto = (texto or "").strip()
+    texto = " ".join(texto.split())
+    return texto if len(texto) <= limite else texto[:limite].rstrip() + "…"
+
+
+def clave_gerencia(valor):
+    clave = (valor or "").strip().upper()
+    if clave == "GAL-DESPACHO":
+        return "GAL"
+    return clave or SIN_ASIGNAR
+
+
+class MarcaSeccion(Flowable):
+    """Flowable sin tamaño que registra a qué sección pertenece la página."""
+
+    def __init__(self, indice):
+        super().__init__()
+        self.indice = indice
+
+    def wrap(self, aw, ah):
+        return 0, 0
+
+    def draw(self):
+        self.canv._seccion = self.indice
+
+
+class ActaCanvas(rl_canvas.Canvas):
+    """Canvas de dos pasadas: numera 'Hoja X de Y' por cada sección (gerencia)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._paginas = []
+        self._seccion = 0
+
+    def showPage(self):
+        self._paginas.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = {}
+        for estado in self._paginas:
+            sec = estado.get("_seccion", 0)
+            total[sec] = total.get(sec, 0) + 1
+
+        vistas = {}
+        for estado in self._paginas:
+            self.__dict__.update(estado)
+            sec = estado.get("_seccion", 0)
+            vistas[sec] = vistas.get(sec, 0) + 1
+            self.setFont("Helvetica", 8)
+            self.setFillColor(ACTA_GRIS)
+            self.drawCentredString(
+                letter[0] / 2 + 20, 50,
+                f"Hoja {vistas[sec]} de {total[sec]}"
+            )
+            super().showPage()
+        super().save()
+
+
+def dibujar_marco_institucional(canvas, doc):
+    """Encabezado y pie del formato SOAPAP (tomado de assets/formato.docx)."""
+    ancho_pag, alto_pag = letter
+
+    def img(nombre, x, y_top, w, h):
+        canvas.drawImage(
+            os.path.join(ACTA_IMG_DIR, nombre), x, alto_pag - y_top - h,
+            width=w, height=h, mask="auto", preserveAspectRatio=True, anchor="nw"
+        )
+
+    canvas.saveState()
+
+    # --- Encabezado: escudo SOAPAP + Pensar en Grande + Por amor a Puebla
+    img("escudo_soapap.png", ACTA_MARGEN_IZQ, 14, 138, 81)
+    img("pensar_en_grande.png", ACTA_MARGEN_IZQ + 193, 14, 138, 81)
+    img("por_amor_a_puebla.png", ACTA_MARGEN_IZQ + 385, 14, 126, 74)
+
+    # --- Pie: línea, dirección y logo Puebla Gobierno del Estado
+    canvas.setStrokeColor(ACTA_GRIS)
+    canvas.setLineWidth(0.5)
+    canvas.line(ACTA_MARGEN_IZQ, 78, ancho_pag - ACTA_MARGEN_DER, 78)
+
+    canvas.setFillColor(ACTA_GRIS)
+    canvas.setFont("Helvetica", 7)
+    texto = canvas.beginText(ACTA_MARGEN_IZQ, 66)
+    texto.setLeading(9)
+    texto.textLines(
+        "Río Grijalva No. 5312 Int.1, Jardines de San Manuel, C.P. 72570\n"
+        "Puebla, Puebla T: (222) 2461703, 2460215, 2468297, 2422564\n"
+        "www.soapap.gob.mx"
+    )
+    canvas.drawText(texto)
+
+    img("puebla_gobierno.png", ancho_pag - ACTA_MARGEN_DER - 98, alto_pag - 72, 98, 39)
+
+    canvas.restoreState()
+
+
+def construir_acta(secciones, fecha, entregador):
+    """secciones: lista de (nombre_gerencia, [Oficio, ...]). Devuelve los bytes del PDF."""
+    buffer = BytesIO()
+    doc = BaseDocTemplate(
+        buffer, pagesize=letter,
+        leftMargin=ACTA_MARGEN_IZQ, rightMargin=ACTA_MARGEN_DER,
+        topMargin=ACTA_MARGEN_SUP, bottomMargin=ACTA_MARGEN_INF,
+        title="Acta de entrega-recepción de oficios", author="SOAPAP"
+    )
+    marco = Frame(
+        ACTA_MARGEN_IZQ, ACTA_MARGEN_INF, ACTA_ANCHO,
+        letter[1] - ACTA_MARGEN_SUP - ACTA_MARGEN_INF,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0
+    )
+    doc.addPageTemplates([PageTemplate(id="acta", frames=[marco], onPage=dibujar_marco_institucional)])
+
+    s_fecha = ParagraphStyle("fecha", fontName="Helvetica", fontSize=9, alignment=TA_RIGHT, spaceAfter=10)
+    s_titulo = ParagraphStyle("titulo", fontName="Helvetica-Bold", fontSize=13, alignment=TA_CENTER, spaceAfter=10)
+    s_dato = ParagraphStyle("dato", fontName="Helvetica", fontSize=9, leading=13)
+    s_th = ParagraphStyle("th", fontName="Helvetica-Bold", fontSize=8, leading=9.5, textColor=colors.white, alignment=TA_CENTER)
+    s_td = ParagraphStyle("td", fontName="Helvetica", fontSize=8, leading=9.5)
+    s_td_c = ParagraphStyle("td_c", parent=s_td, alignment=TA_CENTER)
+    s_leyenda = ParagraphStyle("leyenda", fontName="Helvetica", fontSize=9, leading=13, spaceBefore=14, spaceAfter=10)
+    s_firma = ParagraphStyle("firma", fontName="Helvetica", fontSize=8.5, leading=12)
+    s_firma_c = ParagraphStyle("firma_c", parent=s_firma, alignment=TA_CENTER)
+
+    def p(texto, estilo):
+        return Paragraph(xml_escape(texto or ""), estilo)
+
+    anchos = [22, 62, 85, 105, 110, 58, 68]
+    historia = []
+
+    for indice, (gerencia, oficios) in enumerate(secciones):
+        if indice > 0:
+            historia.append(PageBreak())
+        historia.append(MarcaSeccion(indice))
+
+        historia.append(Paragraph(fecha_larga(fecha), s_fecha))
+        historia.append(Paragraph("ACTA DE ENTREGA-RECEPCIÓN DE OFICIOS", s_titulo))
+        historia.append(Paragraph(f"<b>Gerencia:</b> {xml_escape(gerencia)}", s_dato))
+        historia.append(Paragraph(f"<b>Total de oficios:</b> {len(oficios)}", s_dato))
+        historia.append(Paragraph(f"<b>Entrega:</b> {xml_escape(entregador)} (Oficialía de Partes)", s_dato))
+        historia.append(Spacer(1, 10))
+
+        filas = [[p(t, s_th) for t in (
+            "No.", "Folio SOAPAP", "No. de oficio externo", "Remitente",
+            "Asunto", "Expediente", "Responsable 1"
+        )]]
+        for n, o in enumerate(oficios, start=1):
+            filas.append([
+                p(str(n), s_td_c),
+                p(o.numero, s_td),
+                p(o.numero_oficio, s_td),
+                p(recortar(o.quien_emite, 80), s_td),
+                p(recortar(o.asunto, 40), s_td),
+                p(o.numero_expediente, s_td),
+                p(o.responsable1, s_td),
+            ])
+
+        tabla = Table(filas, colWidths=anchos, repeatRows=1)
+        estilo = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4A4A4A")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#999999")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ]
+        for i in range(2, len(filas), 2):
+            estilo.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F0F0F0")))
+        tabla.setStyle(TableStyle(estilo))
+        historia.append(tabla)
+
+        # --- Cierre: leyenda, observaciones y firmas (siempre juntos)
+        leyenda = Paragraph(
+            f"Recibí los documentos enlistados en la presente, correspondientes a "
+            f"<b>{len(oficios)}</b> oficio(s), en la fecha indicada.",
+            s_leyenda
+        )
+        observaciones = Table(
+            [[Paragraph("<b>Observaciones:</b>", s_firma)], [""], [""], [""]],
+            colWidths=[ACTA_ANCHO], rowHeights=[14, 18, 18, 18]
+        )
+        observaciones.setStyle(TableStyle([
+            ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.black),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+
+        raya = "_" * 34
+        firmas = Table(
+            [
+                ["", "", ""],
+                [Paragraph("<b>ENTREGA</b>", s_firma_c), "", Paragraph("<b>RECIBE</b>", s_firma_c)],
+                [Paragraph(xml_escape(entregador), s_firma_c), "", Paragraph(f"Nombre: {raya}", s_firma)],
+                [Paragraph("Oficialía de Partes", s_firma_c), "", Paragraph(f"Cargo: {raya}", s_firma)],
+                [Paragraph(f"Fecha: {fecha.strftime('%d/%m/%Y')}", s_firma_c), "", Paragraph(f"Fecha: {raya}", s_firma)],
+            ],
+            colWidths=[ACTA_ANCHO * 0.42, ACTA_ANCHO * 0.08, ACTA_ANCHO * 0.50],
+            rowHeights=[48, 14, 16, 16, 16]
+        )
+        firmas.setStyle(TableStyle([
+            ("LINEBELOW", (0, 0), (0, 0), 0.5, colors.black),
+            ("LINEBELOW", (2, 0), (2, 0), 0.5, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+
+        historia.append(KeepTogether([leyenda, observaciones, Spacer(1, 14), firmas]))
+
+    doc.build(historia, canvasmaker=ActaCanvas)
+    return buffer.getvalue()
+
+
+@app.route("/exportar_entrega")
+def exportar_entrega():
+    if "usuario" not in session:
+        return redirect(url_for("login"))
+    if session.get("rol") not in ["admin", "superadmin"]:
+        return "No autorizado", 403
+
+    # Fecha seleccionada (YYYY-MM-DD); si falta o es inválida se usa hoy
+    try:
+        fecha = datetime.strptime(request.args.get("fecha", ""), "%Y-%m-%d").date()
+    except ValueError:
+        fecha = datetime.now().date()
+
+    gerencia_filtro = request.args.get("gerencia", "").strip().upper().replace("_", " ")
+
+    oficios = (
+        Oficio.query
+        .filter(Oficio.fecha == fecha.strftime("%Y-%m-%d"))
+        .order_by(Oficio.id)
+        .all()
+    )
+
+    grupos = {}
+    for o in oficios:
+        grupos.setdefault(clave_gerencia(o.gerencia_turnada), []).append(o)
+
+    # Gerencias conocidas primero (en orden fijo), luego cualquier otra, y "Sin asignar" al final
+    orden = GERENCIAS_ACTA + sorted(k for k in grupos if k not in GERENCIAS_ACTA and k != SIN_ASIGNAR) + [SIN_ASIGNAR]
+    secciones = [
+        (nombre, grupos[nombre]) for nombre in orden
+        if nombre in grupos and (not gerencia_filtro or nombre == gerencia_filtro)
+    ]
+
+    if not secciones:
+        flash(f"No hay oficios registrados el {fecha.strftime('%d/%m/%Y')}"
+              + (f" para {gerencia_filtro.title() if gerencia_filtro == SIN_ASIGNAR else gerencia_filtro}." if gerencia_filtro else "."),
+              "warning")
+        return redirect(url_for("lista"))
+
+    usuario = Usuario.query.filter_by(usuario=session["usuario"]).first()
+    entregador = (usuario.nombre_completo if usuario and usuario.nombre_completo else session["usuario"])
+
+    pdf = construir_acta(secciones, fecha, entregador)
+
+    return send_file(
+        BytesIO(pdf),
+        as_attachment=True,
+        download_name=f"entrega_recepcion_{fecha.strftime('%Y-%m-%d')}.pdf",
+        mimetype="application/pdf"
+    )
 
 
 # --------------------------
