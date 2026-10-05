@@ -703,7 +703,7 @@ def dibujar_marco_institucional(canvas, doc):
     canvas.restoreState()
 
 
-def construir_acta(secciones, fecha, entregador):
+def construir_acta(secciones, fecha, elaboro):
     """secciones: lista de (nombre_gerencia, [Oficio, ...]). Devuelve los bytes del PDF."""
     buffer = BytesIO()
     doc = BaseDocTemplate(
@@ -732,7 +732,7 @@ def construir_acta(secciones, fecha, entregador):
     def p(texto, estilo):
         return Paragraph(xml_escape(texto or ""), estilo)
 
-    anchos = [22, 62, 85, 105, 110, 58, 68]
+    anchos = [22, 62, 85, 105, 110, 63, 63]
     historia = []
 
     for indice, (gerencia, oficios) in enumerate(secciones):
@@ -744,12 +744,12 @@ def construir_acta(secciones, fecha, entregador):
         historia.append(Paragraph("ACTA DE ENTREGA-RECEPCIÓN DE OFICIOS", s_titulo))
         historia.append(Paragraph(f"<b>Gerencia:</b> {xml_escape(gerencia)}", s_dato))
         historia.append(Paragraph(f"<b>Total de oficios:</b> {len(oficios)}", s_dato))
-        historia.append(Paragraph(f"<b>Entrega:</b> {xml_escape(entregador)} (Oficialía de Partes)", s_dato))
+        historia.append(Paragraph(f"<b>Elaboró:</b> {xml_escape(elaboro)}", s_dato))
         historia.append(Spacer(1, 10))
 
         filas = [[p(t, s_th) for t in (
             "No.", "Folio SOAPAP", "No. de oficio externo", "Remitente",
-            "Asunto", "Expediente", "Responsable 1"
+            "Asunto", "Responsable 1", "Responsable 2"
         )]]
         for n, o in enumerate(oficios, start=1):
             filas.append([
@@ -758,8 +758,8 @@ def construir_acta(secciones, fecha, entregador):
                 p(o.numero_oficio, s_td),
                 p(recortar(o.quien_emite, 80), s_td),
                 p(recortar(o.asunto, 40), s_td),
-                p(o.numero_expediente, s_td),
-                p(o.responsable1, s_td),
+                p(recortar(o.responsable1, 60), s_td),
+                p(recortar(o.responsable2, 60), s_td),
             ])
 
         tabla = Table(filas, colWidths=anchos, repeatRows=1)
@@ -792,16 +792,16 @@ def construir_acta(secciones, fecha, entregador):
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ]))
 
-        raya = "_" * 34
+        raya = "_" * 30
         firmas = Table(
             [
                 ["", "", ""],
                 [Paragraph("<b>ENTREGA</b>", s_firma_c), "", Paragraph("<b>RECIBE</b>", s_firma_c)],
-                [Paragraph(xml_escape(entregador), s_firma_c), "", Paragraph(f"Nombre: {raya}", s_firma)],
-                [Paragraph("Oficialía de Partes", s_firma_c), "", Paragraph(f"Cargo: {raya}", s_firma)],
-                [Paragraph(f"Fecha: {fecha.strftime('%d/%m/%Y')}", s_firma_c), "", Paragraph(f"Fecha: {raya}", s_firma)],
+                [Paragraph(f"Nombre: {raya}", s_firma), "", Paragraph(f"Nombre: {raya}", s_firma)],
+                [Paragraph(f"Cargo: {raya}", s_firma), "", Paragraph(f"Cargo: {raya}", s_firma)],
+                [Paragraph(f"Fecha: {raya}", s_firma), "", Paragraph(f"Fecha: {raya}", s_firma)],
             ],
-            colWidths=[ACTA_ANCHO * 0.42, ACTA_ANCHO * 0.08, ACTA_ANCHO * 0.50],
+            colWidths=[ACTA_ANCHO * 0.46, ACTA_ANCHO * 0.08, ACTA_ANCHO * 0.46],
             rowHeights=[48, 14, 16, 16, 16]
         )
         firmas.setStyle(TableStyle([
@@ -818,21 +818,8 @@ def construir_acta(secciones, fecha, entregador):
     return buffer.getvalue()
 
 
-@app.route("/exportar_entrega")
-def exportar_entrega():
-    if "usuario" not in session:
-        return redirect(url_for("login"))
-    if session.get("rol") not in ["admin", "superadmin"]:
-        return "No autorizado", 403
-
-    # Fecha seleccionada (YYYY-MM-DD); si falta o es inválida se usa hoy
-    try:
-        fecha = datetime.strptime(request.args.get("fecha", ""), "%Y-%m-%d").date()
-    except ValueError:
-        fecha = datetime.now().date()
-
-    gerencia_filtro = request.args.get("gerencia", "").strip().upper().replace("_", " ")
-
+def secciones_entrega(fecha, gerencia_filtro):
+    """Oficios de `fecha` agrupados por gerencia: [(nombre, [Oficio, ...]), ...]."""
     oficios = (
         Oficio.query
         .filter(Oficio.fecha == fecha.strftime("%Y-%m-%d"))
@@ -846,10 +833,44 @@ def exportar_entrega():
 
     # Gerencias conocidas primero (en orden fijo), luego cualquier otra, y "Sin asignar" al final
     orden = GERENCIAS_ACTA + sorted(k for k in grupos if k not in GERENCIAS_ACTA and k != SIN_ASIGNAR) + [SIN_ASIGNAR]
-    secciones = [
+    return [
         (nombre, grupos[nombre]) for nombre in orden
         if nombre in grupos and (not gerencia_filtro or nombre == gerencia_filtro)
     ]
+
+
+def parametros_entrega():
+    """Fecha (YYYY-MM-DD; si falta o es inválida, hoy) y gerencia normalizada del query string."""
+    try:
+        fecha = datetime.strptime(request.args.get("fecha", ""), "%Y-%m-%d").date()
+    except ValueError:
+        fecha = datetime.now().date()
+    gerencia_filtro = request.args.get("gerencia", "").strip().upper().replace("_", " ")
+    return fecha, gerencia_filtro
+
+
+@app.route("/entrega_verificar")
+def entrega_verificar():
+    """Total de oficios que saldrían en el acta; el modal lo consulta antes de descargar."""
+    if "usuario" not in session:
+        return jsonify({"error": "sesion"}), 401
+    if session.get("rol") not in ["admin", "superadmin"]:
+        return jsonify({"error": "no autorizado"}), 403
+
+    fecha, gerencia_filtro = parametros_entrega()
+    secciones = secciones_entrega(fecha, gerencia_filtro)
+    return jsonify({"total": sum(len(oficios) for _, oficios in secciones)})
+
+
+@app.route("/exportar_entrega")
+def exportar_entrega():
+    if "usuario" not in session:
+        return redirect(url_for("login"))
+    if session.get("rol") not in ["admin", "superadmin"]:
+        return "No autorizado", 403
+
+    fecha, gerencia_filtro = parametros_entrega()
+    secciones = secciones_entrega(fecha, gerencia_filtro)
 
     if not secciones:
         flash(f"No hay oficios registrados el {fecha.strftime('%d/%m/%Y')}"
@@ -858,9 +879,9 @@ def exportar_entrega():
         return redirect(url_for("lista"))
 
     usuario = Usuario.query.filter_by(usuario=session["usuario"]).first()
-    entregador = (usuario.nombre_completo if usuario and usuario.nombre_completo else session["usuario"])
+    elaboro = (usuario.nombre_completo if usuario and usuario.nombre_completo else session["usuario"])
 
-    pdf = construir_acta(secciones, fecha, entregador)
+    pdf = construir_acta(secciones, fecha, elaboro)
 
     return send_file(
         BytesIO(pdf),

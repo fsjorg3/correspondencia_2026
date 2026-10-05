@@ -67,6 +67,13 @@
                     <a class="nav-link" href="{{ url_for('exportar_pdf') }}">📄 Exportar PDF</a>
                 </li>
 
+                <!-- ⭐ Entrega-recepción (admin y superadmin) -->
+                {% if session.get('rol') in ['admin', 'superadmin'] %}
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#modalEntrega">📋 Entrega-recepción</a>
+                </li>
+                {% endif %}
+
             </ul>
 
             <!-- ⭐ Lado derecho -->
@@ -109,3 +116,99 @@
         </div>
     </div>
 </nav>
+
+{% if session.get('rol') in ['admin', 'superadmin'] %}
+<!-- ⭐ MODAL ENTREGA-RECEPCIÓN -->
+<div class="modal fade" id="modalEntrega" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form class="modal-content" id="formEntrega" method="GET" action="{{ url_for('exportar_entrega') }}">
+            <div class="modal-header">
+                <h5 class="modal-title">Acta de entrega-recepción</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="entregaAviso" class="alert alert-warning d-none" role="alert"></div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-secondary">Día de entrega</label>
+                    <input type="date" name="fecha" id="entregaFecha" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-secondary">Gerencia</label>
+                    <select name="gerencia" id="entregaGerencia" class="form-select">
+                        <option value="">Todas (una hoja por gerencia)</option>
+                        <option value="DG">DG</option>
+                        <option value="GAL">GAL (incluye GAL-DESPACHO)</option>
+                        <option value="GPSOI">GPSOI</option>
+                        <option value="GSMA">GSMA</option>
+                        <option value="GSTS">GSTS</option>
+                        <option value="GAF">GAF</option>
+                        <option value="SIN_ASIGNAR">Sin asignar</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="entregaBoton">Descargar PDF</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var modalEl = document.getElementById('modalEntrega');
+        var form = document.getElementById('formEntrega');
+        var campoFecha = document.getElementById('entregaFecha');
+        var campoGerencia = document.getElementById('entregaGerencia');
+        var aviso = document.getElementById('entregaAviso');
+        var boton = document.getElementById('entregaBoton');
+
+        function ocultarAviso() { aviso.classList.add('d-none'); }
+        function mostrarAviso(texto) {
+            aviso.textContent = texto;
+            aviso.classList.remove('d-none');
+        }
+
+        // Fecha por defecto: hoy (hora local del navegador)
+        modalEl.addEventListener('show.bs.modal', function () {
+            ocultarAviso();
+            if (!campoFecha.value) {
+                var d = new Date();
+                campoFecha.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+        });
+        campoFecha.addEventListener('change', ocultarAviso);
+        campoGerencia.addEventListener('change', ocultarAviso);
+
+        // Verifica antes de descargar: si no hay oficios, avisa dentro del modal
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            ocultarAviso();
+            var params = new URLSearchParams(new FormData(form)).toString();
+            boton.disabled = true;
+
+            fetch("{{ url_for('entrega_verificar') }}?" + params, { credentials: 'same-origin' })
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('http ' + r.status); }
+                    return r.json();
+                })
+                .then(function (datos) {
+                    if (datos.total === 0) {
+                        var partes = campoFecha.value.split('-');
+                        var fecha = partes[2] + '/' + partes[1] + '/' + partes[0];
+                        var gerencia = campoGerencia.value ? ' para ' + campoGerencia.options[campoGerencia.selectedIndex].text.replace(' (incluye GAL-DESPACHO)', '') : '';
+                        mostrarAviso('No hay oficios registrados el ' + fecha + gerencia + '.');
+                        return;
+                    }
+                    // Descarga el PDF (es un adjunto: la página no cambia)
+                    window.location.href = form.action + '?' + params;
+                    bootstrap.Modal.getInstance(modalEl).hide();
+                })
+                .catch(function () {
+                    mostrarAviso('No se pudo verificar la información. Vuelve a iniciar sesión o inténtalo de nuevo.');
+                })
+                .finally(function () { boton.disabled = false; });
+        });
+    })();
+</script>
+{% endif %}
