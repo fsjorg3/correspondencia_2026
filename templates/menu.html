@@ -128,9 +128,19 @@
             </div>
             <div class="modal-body">
                 <div id="entregaAviso" class="alert alert-warning d-none" role="alert"></div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold text-secondary">Día de entrega</label>
-                    <input type="date" name="fecha" id="entregaFecha" class="form-control" required>
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-bold text-secondary">Desde</label>
+                        <input type="datetime-local" name="desde" id="entregaDesde" class="form-control" required>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-bold text-secondary">Hasta</label>
+                        <input type="datetime-local" name="hasta" id="entregaHasta" class="form-control" required>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-text">Incluye los oficios ingresados después de <b>Desde</b> y hasta <b>Hasta</b>.
+                            Por defecto: del corte del día hábil anterior (el lunes, el viernes) al corte de hoy.</div>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold text-secondary">Gerencia</label>
@@ -158,7 +168,8 @@
     (function () {
         var modalEl = document.getElementById('modalEntrega');
         var form = document.getElementById('formEntrega');
-        var campoFecha = document.getElementById('entregaFecha');
+        var campoDesde = document.getElementById('entregaDesde');
+        var campoHasta = document.getElementById('entregaHasta');
         var campoGerencia = document.getElementById('entregaGerencia');
         var aviso = document.getElementById('entregaAviso');
         var boton = document.getElementById('entregaBoton');
@@ -169,16 +180,38 @@
             aviso.classList.remove('d-none');
         }
 
-        // Fecha por defecto: hoy (hora local del navegador)
+        // Hora de impresión del acta (debe coincidir con ACTA_HORA_CORTE en app.py)
+        var HORA_CORTE = '16:30';
+
+        function dosDigitos(n) { return String(n).padStart(2, '0'); }
+        function valorLocal(d) {
+            return d.getFullYear() + '-' + dosDigitos(d.getMonth() + 1) + '-' + dosDigitos(d.getDate()) + 'T' + HORA_CORTE;
+        }
+
+        // Día hábil anterior: el lunes retrocede al viernes (domingo y sábado también)
+        function diaHabilAnterior(d) {
+            var r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            do { r.setDate(r.getDate() - 1); } while (r.getDay() === 0 || r.getDay() === 6);
+            return r;
+        }
+
+        // Periodo por defecto (hora local del navegador): corte del día hábil anterior -> corte de hoy
         modalEl.addEventListener('show.bs.modal', function () {
             ocultarAviso();
-            if (!campoFecha.value) {
-                var d = new Date();
-                campoFecha.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-            }
+            var hoy = new Date();
+            if (!campoHasta.value) { campoHasta.value = valorLocal(hoy); }
+            if (!campoDesde.value) { campoDesde.value = valorLocal(diaHabilAnterior(hoy)); }
         });
-        campoFecha.addEventListener('change', ocultarAviso);
+        campoDesde.addEventListener('change', ocultarAviso);
+        campoHasta.addEventListener('change', ocultarAviso);
         campoGerencia.addEventListener('change', ocultarAviso);
+
+        // 2026-10-05T16:30 -> 05/10/2026 16:30
+        function formatear(valor) {
+            var p = valor.split('T');
+            var f = p[0].split('-');
+            return f[2] + '/' + f[1] + '/' + f[0] + ' ' + p[1];
+        }
 
         // Verifica antes de descargar: si no hay oficios, avisa dentro del modal
         form.addEventListener('submit', function (e) {
@@ -193,11 +226,13 @@
                     return r.json();
                 })
                 .then(function (datos) {
+                    if (datos.rango_invalido) {
+                        mostrarAviso('El inicio del periodo debe ser anterior a su fin.');
+                        return;
+                    }
                     if (datos.total === 0) {
-                        var partes = campoFecha.value.split('-');
-                        var fecha = partes[2] + '/' + partes[1] + '/' + partes[0];
                         var gerencia = campoGerencia.value ? ' para ' + campoGerencia.options[campoGerencia.selectedIndex].text.replace(' (incluye GAL-DESPACHO)', '') : '';
-                        mostrarAviso('No hay oficios registrados el ' + fecha + gerencia + '.');
+                        mostrarAviso('No hay oficios registrados del ' + formatear(campoDesde.value) + ' a ' + formatear(campoHasta.value) + gerencia + '.');
                         return;
                     }
                     // Descarga el PDF (es un adjunto: la página no cambia)

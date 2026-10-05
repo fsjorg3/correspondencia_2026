@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text, or_
+from sqlalchemy import text, or_, func
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from io import BytesIO
@@ -38,6 +38,13 @@ def sumar_dias_habiles(fecha, dias):
         resultado += timedelta(days=1)
         if resultado.weekday() < 5 and resultado not in FERIADOS:
             contador += 1
+    return resultado
+
+def dia_habil_anterior(fecha):
+    """Último día hábil previo a `fecha` (el lunes devuelve el viernes)."""
+    resultado = fecha - timedelta(days=1)
+    while resultado.weekday() >= 5 or resultado in FERIADOS:
+        resultado -= timedelta(days=1)
     return resultado
 
 def dias_habiles(fecha_inicio, fecha_fin):
@@ -593,6 +600,10 @@ SIN_ASIGNAR = "SIN ASIGNAR"
 ACTA_IMG_DIR = os.path.join(app.root_path, "static", "img", "formato")
 ACTA_GRIS = colors.HexColor("#7F7F7F")
 
+# Hora a la que se imprime el acta (corte por defecto del periodo desde/hasta)
+ACTA_HORA_CORTE = "16:30"
+ACTA_FORMATO_DT = "%Y-%m-%dT%H:%M"  # el de <input type="datetime-local">
+
 # Márgenes del formato institucional (Carta vertical)
 ACTA_MARGEN_IZQ = 49.7
 ACTA_MARGEN_DER = 51.8
@@ -609,6 +620,15 @@ def recortar(texto, limite):
     texto = (texto or "").strip()
     texto = " ".join(texto.split())
     return texto if len(texto) <= limite else texto[:limite].rstrip() + "…"
+
+
+def ingreso_corto(oficio):
+    """'dd/mm HH:MM' del ingreso del oficio (para distinguir atrasados de otro día)."""
+    try:
+        dia = datetime.strptime(oficio.fecha, "%Y-%m-%d").strftime("%d/%m")
+    except (TypeError, ValueError):
+        dia = ""
+    return f"{dia} {oficio.hora or ''}".strip()
 
 
 def clave_gerencia(valor):
@@ -703,8 +723,8 @@ def dibujar_marco_institucional(canvas, doc):
     canvas.restoreState()
 
 
-def construir_acta(secciones, fecha, elaboro):
-    """secciones: lista de (nombre_gerencia, [Oficio, ...]). Devuelve los bytes del PDF."""
+def construir_acta(secciones, desde, hasta, elaboro):
+    """secciones: lista de (nombre_gerencia, [Oficio, ...]); desde/hasta: periodo (datetime). Devuelve los bytes del PDF."""
     buffer = BytesIO()
     doc = BaseDocTemplate(
         buffer, pagesize=letter,
@@ -737,7 +757,7 @@ def construir_acta(secciones, fecha, elaboro):
         nombres = [recortar(n, 60) for n in (o.responsable1, o.responsable2) if (n or "").strip()]
         return Paragraph("<br/>".join(xml_escape(n) for n in nombres), s_td)
 
-    anchos = [22, 58, 80, 105, 125, 80, 40]
+    anchos = [22, 58, 78, 98, 120, 80, 54]
     historia = []
 
     for indice, (gerencia, oficios) in enumerate(secciones):
@@ -745,16 +765,18 @@ def construir_acta(secciones, fecha, elaboro):
             historia.append(PageBreak())
         historia.append(MarcaSeccion(indice))
 
-        historia.append(Paragraph(fecha_larga(fecha), s_fecha))
+        historia.append(Paragraph(fecha_larga(hasta), s_fecha))
         historia.append(Paragraph("ACTA DE ENTREGA-RECEPCIÓN DE OFICIOS", s_titulo))
         historia.append(Paragraph(f"<b>Gerencia:</b> {xml_escape(gerencia)}", s_dato))
         historia.append(Paragraph(f"<b>Total de oficios:</b> {len(oficios)}", s_dato))
+        historia.append(Paragraph(
+            f"<b>Periodo:</b> {desde.strftime('%d/%m/%Y %H:%M')} a {hasta.strftime('%d/%m/%Y %H:%M')}", s_dato))
         historia.append(Paragraph(f"<b>Elaboró:</b> {xml_escape(elaboro)}", s_dato))
         historia.append(Spacer(1, 10))
 
         filas = [[p(t, s_th) for t in (
             "No.", "Folio SOAPAP", "No. de oficio externo", "Remitente",
-            "Asunto", "Responsable", "Hora"
+            "Asunto", "Responsable", "Ingreso"
         )]]
         for n, o in enumerate(oficios, start=1):
             filas.append([
@@ -764,7 +786,7 @@ def construir_acta(secciones, fecha, elaboro):
                 p(recortar(o.quien_emite, 100), s_td),
                 p(recortar(o.asunto, 70), s_td),
                 responsables(o),
-                p(o.hora, s_td_c),
+                p(ingreso_corto(o), s_td_c),
             ])
 
         tabla = Table(filas, colWidths=anchos, repeatRows=1)
@@ -823,12 +845,15 @@ def construir_acta(secciones, fecha, elaboro):
     return buffer.getvalue()
 
 
-def secciones_entrega(fecha, gerencia_filtro):
-    """Oficios de `fecha` agrupados por gerencia: [(nombre, [Oficio, ...]), ...]."""
+def secciones_entrega(desde, hasta, gerencia_filtro):
+    """Oficios ingresados en (desde, hasta] agrupados por gerencia: [(nombre, [Oficio, ...]), ...]."""
+    # fecha (YYYY-MM-DD) + hora (HH:MM) comparan cronológicamente como texto
+    ingreso = Oficio.fecha + " " + func.coalesce(Oficio.hora, "00:00")
     oficios = (
         Oficio.query
-        .filter(Oficio.fecha == fecha.strftime("%Y-%m-%d"))
-        .order_by(Oficio.id)
+        .filter(ingreso > desde.strftime("%Y-%m-%d %H:%M"),
+                ingreso <= hasta.strftime("%Y-%m-%d %H:%M"))
+        .order_by(Oficio.fecha, Oficio.hora, Oficio.id)
         .all()
     )
 
@@ -845,13 +870,28 @@ def secciones_entrega(fecha, gerencia_filtro):
 
 
 def parametros_entrega():
-    """Fecha (YYYY-MM-DD; si falta o es inválida, hoy) y gerencia normalizada del query string."""
-    try:
-        fecha = datetime.strptime(request.args.get("fecha", ""), "%Y-%m-%d").date()
-    except ValueError:
-        fecha = datetime.now().date()
+    """(desde, hasta, gerencia) del query string.
+
+    desde/hasta llegan como YYYY-MM-DDTHH:MM. Por defecto el periodo va de la hora de corte
+    del día hábil anterior (el lunes: el viernes) a la hora de corte de hoy.
+    """
+    hoy = datetime.now().date()
+    corte = datetime.strptime(ACTA_HORA_CORTE, "%H:%M").time()
+
+    def leer(nombre, defecto):
+        try:
+            return datetime.strptime(request.args.get(nombre, ""), ACTA_FORMATO_DT)
+        except ValueError:
+            return defecto
+
+    hasta = leer("hasta", datetime.combine(hoy, corte))
+    desde = leer("desde", datetime.combine(dia_habil_anterior(hoy), corte))
     gerencia_filtro = request.args.get("gerencia", "").strip().upper().replace("_", " ")
-    return fecha, gerencia_filtro
+    return desde, hasta, gerencia_filtro
+
+
+def texto_periodo(desde, hasta):
+    return f"{desde.strftime('%d/%m/%Y %H:%M')} a {hasta.strftime('%d/%m/%Y %H:%M')}"
 
 
 @app.route("/entrega_verificar")
@@ -862,8 +902,11 @@ def entrega_verificar():
     if session.get("rol") not in ["admin", "superadmin"]:
         return jsonify({"error": "no autorizado"}), 403
 
-    fecha, gerencia_filtro = parametros_entrega()
-    secciones = secciones_entrega(fecha, gerencia_filtro)
+    desde, hasta, gerencia_filtro = parametros_entrega()
+    if desde >= hasta:
+        return jsonify({"total": 0, "rango_invalido": True})
+
+    secciones = secciones_entrega(desde, hasta, gerencia_filtro)
     return jsonify({"total": sum(len(oficios) for _, oficios in secciones)})
 
 
@@ -874,11 +917,16 @@ def exportar_entrega():
     if session.get("rol") not in ["admin", "superadmin"]:
         return "No autorizado", 403
 
-    fecha, gerencia_filtro = parametros_entrega()
-    secciones = secciones_entrega(fecha, gerencia_filtro)
+    desde, hasta, gerencia_filtro = parametros_entrega()
+
+    if desde >= hasta:
+        flash("El inicio del periodo debe ser anterior a su fin.", "warning")
+        return redirect(url_for("lista"))
+
+    secciones = secciones_entrega(desde, hasta, gerencia_filtro)
 
     if not secciones:
-        flash(f"No hay oficios registrados el {fecha.strftime('%d/%m/%Y')}"
+        flash(f"No hay oficios registrados del {texto_periodo(desde, hasta)}"
               + (f" para {gerencia_filtro.title() if gerencia_filtro == SIN_ASIGNAR else gerencia_filtro}." if gerencia_filtro else "."),
               "warning")
         return redirect(url_for("lista"))
@@ -886,12 +934,12 @@ def exportar_entrega():
     usuario = Usuario.query.filter_by(usuario=session["usuario"]).first()
     elaboro = (usuario.nombre_completo if usuario and usuario.nombre_completo else session["usuario"])
 
-    pdf = construir_acta(secciones, fecha, elaboro)
+    pdf = construir_acta(secciones, desde, hasta, elaboro)
 
     return send_file(
         BytesIO(pdf),
         as_attachment=True,
-        download_name=f"entrega_recepcion_{fecha.strftime('%Y-%m-%d')}.pdf",
+        download_name=f"entrega_recepcion_{hasta.strftime('%Y-%m-%d')}.pdf",
         mimetype="application/pdf"
     )
 
